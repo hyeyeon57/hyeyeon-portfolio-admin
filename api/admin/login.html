@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>관리자 로그인</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    body { font-family: 'Pretendard', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+  <div class="max-w-md w-full mx-4">
+    <!-- 로그인 카드 -->
+    <div class="bg-white rounded-2xl shadow-xl p-8">
+      <div class="text-center mb-8">
+        <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <i data-lucide="lock" class="w-8 h-8 text-blue-600"></i>
+        </div>
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">관리자 로그인</h1>
+        <p class="text-gray-500">포트폴리오 관리 시스템</p>
+      </div>
+
+      <form id="loginForm" class="space-y-6">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">아이디</label>
+          <input 
+            type="text" 
+            id="username" 
+            name="username" 
+            required 
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+            placeholder="아이디를 입력하세요"
+            autocomplete="username"
+          />
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">비밀번호</label>
+          <div class="relative">
+            <input 
+              type="password" 
+              id="password" 
+              name="password" 
+              required 
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+              placeholder="비밀번호를 입력하세요"
+              autocomplete="current-password"
+            />
+            <button 
+              type="button" 
+              onclick="togglePassword()" 
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+            >
+              <i data-lucide="eye" id="eyeIcon" class="w-5 h-5"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="errorMessage" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+          아이디 또는 비밀번호가 올바르지 않습니다.
+        </div>
+
+        <button 
+          type="submit" 
+          id="submitBtn"
+          class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
+        >
+          <i data-lucide="log-in" class="w-5 h-5"></i>
+          로그인
+        </button>
+      </form>
+
+      <div class="mt-6 text-center">
+        <a href="/" class="text-sm text-gray-500 hover:text-blue-600 transition-colors flex items-center justify-center gap-2">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          포트폴리오로 돌아가기
+        </a>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-8 text-center text-sm text-gray-500">
+      <p>© 2025 Jang Haeyeon Portfolio</p>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    // 비밀번호 보기/숨기기
+    function togglePassword() {
+      const passwordInput = document.getElementById('password');
+      const eyeIcon = document.getElementById('eyeIcon');
+      
+      if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        eyeIcon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        passwordInput.type = 'password';
+        eyeIcon.setAttribute('data-lucide', 'eye');
+      }
+      lucide.createIcons();
+    }
+
+    // 로그인 폼 제출
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const submitBtn = document.getElementById('submitBtn');
+      const errorMessage = document.getElementById('errorMessage');
+      
+      // 에러 메시지 숨기기
+      errorMessage.classList.add('hidden');
+      
+      // 버튼 비활성화
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> 로그인 중...';
+      
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include', // 쿠키 포함
+          body: JSON.stringify({ username, password })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          // 로그인 성공 - 관리자 페이지로 이동
+          window.location.href = '/admin';
+        } else {
+          // 로그인 실패
+          errorMessage.textContent = result.error || '아이디 또는 비밀번호가 올바르지 않습니다.';
+          errorMessage.classList.remove('hidden');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i data-lucide="log-in" class="w-5 h-5"></i> 로그인';
+          lucide.createIcons();
+        }
+      } catch (error) {
+        console.error('로그인 오류:', error);
+        errorMessage.textContent = '로그인 중 오류가 발생했습니다.';
+        errorMessage.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i data-lucide="log-in" class="w-5 h-5"></i> 로그인';
+        lucide.createIcons();
+      }
+    });
+
+    // Enter 키로 로그인
+    document.getElementById('username').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('password').focus();
+      }
+    });
+    
+    document.getElementById('password').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+      }
+    });
+  </script>
+</body>
+</html>
+

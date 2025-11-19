@@ -19,13 +19,9 @@ const app = express();
 // Vercel 서버리스 환경 감지
 const isVercel = process.env.VERCEL === '1';
 
-// 파일 경로 설정 (Vercel 환경에서는 process.cwd() 사용)
-const getBasePath = () => {
-  if (isVercel) {
-    return process.cwd();
-  }
-  return __dirname;
-};
+// 파일 경로 설정
+// Vercel: __dirname은 /var/task/api를 가리킴
+// 로컬: __dirname은 api/ 디렉토리를 가리킴
 
 // 미들웨어
 app.use(cors({
@@ -86,29 +82,38 @@ const requireAuth = (req, res, next) => {
   res.redirect('/admin/login');
 };
 
-// 정적 파일 서빙 (admin HTML 파일들)
-const basePath = getBasePath();
-const adminPath = isVercel 
-  ? path.join(basePath, 'server', 'admin')
-  : path.join(basePath, '..', 'server', 'admin');
-
 // 파일 경로 확인 함수
+// Vercel: __dirname은 /var/task/api를 가리키므로 api/admin은 __dirname/admin
+// 로컬: __dirname은 api/ 디렉토리를 가리키므로 server/admin은 __dirname/../server/admin
 const getAdminFilePath = (filename) => {
-  const filePath = path.join(adminPath, filename);
-  if (existsSync(filePath)) {
-    return filePath;
-  }
-  // Vercel 환경에서 다른 경로 시도
+  // Vercel 환경: api/admin 디렉토리 (api/index.js와 같은 레벨의 admin 디렉토리)
   if (isVercel) {
-    const altPath = path.join(process.cwd(), 'server', 'admin', filename);
+    const apiAdminPath = path.join(__dirname, 'admin', filename);
+    if (existsSync(apiAdminPath)) {
+      return apiAdminPath;
+    }
+    // 대체 경로 시도
+    const altPath = path.join(process.cwd(), 'api', 'admin', filename);
     if (existsSync(altPath)) {
       return altPath;
     }
+  } else {
+    // 로컬 환경: server/admin 디렉토리
+    const serverAdminPath = path.join(__dirname, '..', 'server', 'admin', filename);
+    if (existsSync(serverAdminPath)) {
+      return serverAdminPath;
+    }
+    // api/admin도 시도 (개발 중 복사본)
+    const apiAdminPath = path.join(__dirname, 'admin', filename);
+    if (existsSync(apiAdminPath)) {
+      return apiAdminPath;
+    }
   }
+  
   return null;
 };
 
-app.use('/admin', express.static(adminPath));
+// 정적 파일 서빙은 각 라우트에서 직접 처리
 
 // 백오피스 관리자 페이지 라우트
 app.get('/admin/login', (req, res) => {
