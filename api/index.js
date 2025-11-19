@@ -92,6 +92,22 @@ const adminPath = isVercel
   ? path.join(basePath, 'server', 'admin')
   : path.join(basePath, '..', 'server', 'admin');
 
+// 파일 경로 확인 함수
+const getAdminFilePath = (filename) => {
+  const filePath = path.join(adminPath, filename);
+  if (existsSync(filePath)) {
+    return filePath;
+  }
+  // Vercel 환경에서 다른 경로 시도
+  if (isVercel) {
+    const altPath = path.join(process.cwd(), 'server', 'admin', filename);
+    if (existsSync(altPath)) {
+      return altPath;
+    }
+  }
+  return null;
+};
+
 app.use('/admin', express.static(adminPath));
 
 // 백오피스 관리자 페이지 라우트
@@ -99,37 +115,41 @@ app.get('/admin/login', (req, res) => {
   if (req.session && req.session.isAuthenticated) {
     return res.redirect('/admin');
   }
-  const loginPath = path.join(adminPath, 'login.html');
-  if (existsSync(loginPath)) {
+  const loginPath = getAdminFilePath('login.html');
+  if (loginPath) {
     res.sendFile(loginPath);
   } else {
+    console.error('Login page not found. Base path:', basePath, 'Admin path:', adminPath);
     res.status(404).send('Login page not found.');
   }
 });
 
 app.get('/admin/viewer', (req, res) => {
-  const adminIndexPath = path.join(adminPath, 'index.html');
-  if (existsSync(adminIndexPath)) {
+  const adminIndexPath = getAdminFilePath('index.html');
+  if (adminIndexPath) {
     res.sendFile(adminIndexPath);
   } else {
+    console.error('Admin viewer page not found. Base path:', basePath, 'Admin path:', adminPath);
     res.status(404).send('Admin viewer page not found.');
   }
 });
 
 app.get('/admin', requireAuth, (req, res) => {
-  const adminIndexPath = path.join(adminPath, 'index.html');
-  if (existsSync(adminIndexPath)) {
+  const adminIndexPath = getAdminFilePath('index.html');
+  if (adminIndexPath) {
     res.sendFile(adminIndexPath);
   } else {
+    console.error('Admin page not found. Base path:', basePath, 'Admin path:', adminPath);
     res.status(404).send('Admin page not found.');
   }
 });
 
 app.get('/admin/create', requireAuth, (req, res) => {
-  const createPath = path.join(adminPath, 'create.html');
-  if (existsSync(createPath)) {
+  const createPath = getAdminFilePath('create.html');
+  if (createPath) {
     res.sendFile(createPath);
   } else {
+    console.error('Create page not found. Base path:', basePath, 'Admin path:', adminPath);
     res.status(404).send('Project creation page not found.');
   }
 });
@@ -520,6 +540,14 @@ if (isVercel) {
       return res.status(200).end();
     }
     
+    // Vercel에서 rewrite된 경로 처리
+    // req.url은 원본 경로를 포함 (예: /admin, /admin/login)
+    // /api/bo/* 경로를 /api/*로 변환
+    if (req.url && req.url.startsWith('/api/bo/')) {
+      req.url = req.url.replace('/api/bo', '/api');
+    }
+    
+    // Express 앱에 요청 전달
     return app(req, res);
   };
 } else {
