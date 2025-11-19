@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "백오피스 관리 시스템",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "dev": "node server/index.cjs",
     "start": "node server/index.cjs"
