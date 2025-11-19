@@ -1,0 +1,26 @@
+{
+  "name": "hyeyeon-portfolio-admin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "백오피스 관리 시스템",
+  "scripts": {
+    "dev": "node server/index.cjs",
+    "start": "node server/index.cjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-session": "^1.18.2",
+    "memorystore": "^1.6.7",
+    "mongoose": "^8.19.3",
+    "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^20"
+  }
+}
+
