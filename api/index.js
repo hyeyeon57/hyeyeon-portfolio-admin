@@ -19,6 +19,14 @@ const app = express();
 // Vercel 서버리스 환경 감지
 const isVercel = process.env.VERCEL === '1';
 
+// 파일 경로 설정 (Vercel 환경에서는 process.cwd() 사용)
+const getBasePath = () => {
+  if (isVercel) {
+    return process.cwd();
+  }
+  return __dirname;
+};
+
 // 미들웨어
 app.use(cors({
   origin: [
@@ -79,35 +87,61 @@ const requireAuth = (req, res, next) => {
 };
 
 // 정적 파일 서빙 (admin HTML 파일들)
-app.use('/admin', express.static(path.join(__dirname, '../server/admin')));
+const basePath = getBasePath();
+const adminPath = isVercel 
+  ? path.join(basePath, 'server', 'admin')
+  : path.join(basePath, '..', 'server', 'admin');
+
+app.use('/admin', express.static(adminPath));
 
 // 백오피스 관리자 페이지 라우트
 app.get('/admin/login', (req, res) => {
   if (req.session && req.session.isAuthenticated) {
     return res.redirect('/admin');
   }
-  const loginPath = path.join(__dirname, '../server/admin/login.html');
-  res.sendFile(loginPath);
+  const loginPath = path.join(adminPath, 'login.html');
+  if (existsSync(loginPath)) {
+    res.sendFile(loginPath);
+  } else {
+    res.status(404).send('Login page not found.');
+  }
 });
 
 app.get('/admin/viewer', (req, res) => {
-  const adminPath = path.join(__dirname, '../server/admin/index.html');
-  res.sendFile(adminPath);
+  const adminIndexPath = path.join(adminPath, 'index.html');
+  if (existsSync(adminIndexPath)) {
+    res.sendFile(adminIndexPath);
+  } else {
+    res.status(404).send('Admin viewer page not found.');
+  }
 });
 
 app.get('/admin', requireAuth, (req, res) => {
-  const adminPath = path.join(__dirname, '../server/admin/index.html');
-  res.sendFile(adminPath);
+  const adminIndexPath = path.join(adminPath, 'index.html');
+  if (existsSync(adminIndexPath)) {
+    res.sendFile(adminIndexPath);
+  } else {
+    res.status(404).send('Admin page not found.');
+  }
 });
 
 app.get('/admin/create', requireAuth, (req, res) => {
-  const createPath = path.join(__dirname, '../server/admin/create.html');
-  res.sendFile(createPath);
+  const createPath = path.join(adminPath, 'create.html');
+  if (existsSync(createPath)) {
+    res.sendFile(createPath);
+  } else {
+    res.status(404).send('Project creation page not found.');
+  }
 });
 
 // API Routes
-// 인증 API
-app.post('/api/auth/login', (req, res) => {
+// 인증 API (로컬과 Vercel 모두 지원)
+const registerApiRoute = (method, path, handler) => {
+  app[method](path, handler);
+  app[method](`/api/bo${path.replace('/api', '')}`, handler);
+};
+
+registerApiRoute('post', '/api/auth/login', (req, res) => {
   const { username, password } = req.body;
   if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
     req.session.isAuthenticated = true;
@@ -118,7 +152,7 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
-app.post('/api/auth/logout', (req, res) => {
+registerApiRoute('post', '/api/auth/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) {
       return res.status(500).json({ success: false, error: '로그아웃 실패' });
@@ -127,7 +161,7 @@ app.post('/api/auth/logout', (req, res) => {
   });
 });
 
-app.get('/api/auth/check', (req, res) => {
+registerApiRoute('get', '/api/auth/check', (req, res) => {
   res.json({
     success: true,
     authenticated: req.session && req.session.isAuthenticated || false
@@ -144,7 +178,7 @@ const initDB = async () => {
 };
 
 // 방문자 로그 API
-app.post('/api/visitors', async (req, res) => {
+registerApiRoute('post', '/api/visitors', async (req, res) => {
   try {
     await initDB();
     if (mongoose.connection.readyState !== 1) {
@@ -186,7 +220,7 @@ app.post('/api/visitors', async (req, res) => {
   }
 });
 
-app.get('/api/visitors/stats', async (req, res) => {
+registerApiRoute('get', '/api/visitors/stats', async (req, res) => {
   try {
     await initDB();
     if (mongoose.connection.readyState !== 1) {
@@ -233,7 +267,7 @@ app.get('/api/visitors/stats', async (req, res) => {
   }
 });
 
-app.get('/api/visitors', async (req, res) => {
+registerApiRoute('get', '/api/visitors', async (req, res) => {
   try {
     await initDB();
     if (mongoose.connection.readyState !== 1) {
@@ -285,12 +319,11 @@ const handleGetProjects = async (req, res) => {
   }
 };
 
-// /api/projects와 /api/bo/projects 모두 처리 (무한 루프 방지)
-app.get('/api/projects', handleGetProjects);
-app.get('/api/bo/projects', handleGetProjects);
+// 프로젝트 목록 조회
+registerApiRoute('get', '/api/projects', handleGetProjects);
 
 // 프로젝트 상세 조회
-app.get('/api/projects/:id', async (req, res) => {
+registerApiRoute('get', '/api/projects/:id', async (req, res) => {
   try {
     await initDB();
     if (mongoose.connection.readyState !== 1) {
@@ -315,7 +348,7 @@ app.get('/api/projects/:id', async (req, res) => {
 });
 
 // 프로젝트 생성
-app.post('/api/projects', upload.array('images', 9), async (req, res) => {
+registerApiRoute('post', '/api/projects', upload.array('images', 9), async (req, res) => {
   try {
     await initDB();
     if (mongoose.connection.readyState !== 1) {
@@ -343,7 +376,7 @@ app.post('/api/projects', upload.array('images', 9), async (req, res) => {
 });
 
 // 프로젝트 수정
-app.put('/api/projects/:id', upload.array('images', 9), async (req, res) => {
+registerApiRoute('put', '/api/projects/:id', upload.array('images', 9), async (req, res) => {
   try {
     await initDB();
     if (mongoose.connection.readyState !== 1) {
@@ -381,7 +414,7 @@ app.put('/api/projects/:id', upload.array('images', 9), async (req, res) => {
 });
 
 // 프로젝트 삭제
-app.delete('/api/projects/:id', async (req, res) => {
+registerApiRoute('delete', '/api/projects/:id', async (req, res) => {
   try {
     await initDB();
     if (mongoose.connection.readyState !== 1) {
@@ -407,7 +440,7 @@ app.delete('/api/projects/:id', async (req, res) => {
 });
 
 // 연락처 API
-app.post('/api/contacts', async (req, res) => {
+registerApiRoute('post', '/api/contacts', async (req, res) => {
   try {
     await initDB();
     if (mongoose.connection.readyState !== 1) {
@@ -425,7 +458,7 @@ app.post('/api/contacts', async (req, res) => {
   }
 });
 
-app.get('/api/contacts', async (req, res) => {
+registerApiRoute('get', '/api/contacts', async (req, res) => {
   try {
     await initDB();
     if (mongoose.connection.readyState !== 1) {
@@ -439,7 +472,7 @@ app.get('/api/contacts', async (req, res) => {
   }
 });
 
-app.put('/api/contacts/:id/read', async (req, res) => {
+registerApiRoute('put', '/api/contacts/:id/read', async (req, res) => {
   try {
     await initDB();
     if (mongoose.connection.readyState !== 1) {
@@ -456,7 +489,7 @@ app.put('/api/contacts/:id/read', async (req, res) => {
   }
 });
 
-app.delete('/api/contacts/:id', async (req, res) => {
+registerApiRoute('delete', '/api/contacts/:id', async (req, res) => {
   try {
     await initDB();
     if (mongoose.connection.readyState !== 1) {
