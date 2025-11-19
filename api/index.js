@@ -42,12 +42,13 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'vibe-coding-portfolio-secret-key-2025',
   resave: false,
   saveUninitialized: false,
-  store: new MemoryStore({
+  store: isVercel ? new MemoryStore({
     checkPeriod: 86400000 // 24시간
-  }),
+  }) : undefined, // 로컬에서는 기본 메모리 스토어 사용
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // 프로덕션에서는 HTTPS만
+    secure: isVercel ? true : false, // Vercel에서는 HTTPS만, 로컬에서는 HTTP 허용
     httpOnly: true,
+    sameSite: isVercel ? 'none' : 'lax', // Vercel에서는 cross-site 쿠키 허용
     maxAge: 24 * 60 * 60 * 1000 // 24시간
   }
 }));
