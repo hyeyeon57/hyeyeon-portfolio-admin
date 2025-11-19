@@ -1,9 +1,5 @@
 {
   "version": 2,
-  "installCommand": "npm install",
-  "framework": null,
-  "cleanUrls": true,
-  "trailingSlash": false,
   "rewrites": [
     {
       "source": "/api/bo/:path*",
