@@ -126,6 +126,13 @@
         const isProduction = window.location.hostname !== 'localhost';
         const apiPath = isProduction ? '/api/bo/auth/login' : '/api/auth/login';
         
+        console.log('🔐 로그인 요청:', { 
+          apiPath, 
+          username, 
+          passwordLength: password.length,
+          isProduction 
+        });
+        
         const response = await fetch(apiPath, {
           method: 'POST',
           headers: {
@@ -135,13 +142,18 @@
           body: JSON.stringify({ username, password })
         });
         
+        console.log('📡 응답 상태:', response.status, response.statusText);
+        
         const result = await response.json();
+        console.log('📦 응답 데이터:', result);
         
         if (result.success) {
           // 로그인 성공 - 관리자 페이지로 이동
+          console.log('✅ 로그인 성공, 리다이렉트 중...');
           window.location.href = '/admin';
         } else {
           // 로그인 실패
+          console.error('❌ 로그인 실패:', result.error);
           errorMessage.textContent = result.error || '아이디 또는 비밀번호가 올바르지 않습니다.';
           errorMessage.classList.remove('hidden');
           submitBtn.disabled = false;
@@ -149,8 +161,8 @@
           lucide.createIcons();
         }
       } catch (error) {
-        console.error('로그인 오류:', error);
-        errorMessage.textContent = '로그인 중 오류가 발생했습니다.';
+        console.error('❌ 로그인 오류:', error);
+        errorMessage.textContent = '로그인 중 오류가 발생했습니다: ' + error.message;
         errorMessage.classList.remove('hidden');
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<i data-lucide="log-in" class="w-5 h-5"></i> 로그인';

@@ -119,6 +119,19 @@ const upload = multer({ storage });
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'hing0915';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'dpffla525';
 
+// 환경 변수 로깅 (디버깅용 - 프로덕션에서는 제거 권장)
+if (isVercel) {
+  console.log('🔧 환경 변수 확인:', {
+    hasUsername: !!process.env.ADMIN_USERNAME,
+    hasPassword: !!process.env.ADMIN_PASSWORD,
+    usernameLength: ADMIN_USERNAME.length,
+    passwordLength: ADMIN_PASSWORD.length,
+    username: ADMIN_USERNAME,
+    // 비밀번호는 보안상 일부만 표시
+    passwordPreview: ADMIN_PASSWORD.substring(0, 3) + '***'
+  });
+}
+
 // 로그인 체크 미들웨어
 const requireAuth = (req, res, next) => {
   if (req.session && req.session.isAuthenticated) {
@@ -239,6 +252,21 @@ registerApiRoute('post', '/api/auth/login', (req, res) => {
       req.session.isAuthenticated = true;
       req.session.username = username;
       console.log('✅ 로그인 성공:', username);
+      console.log('🍪 세션 정보:', {
+        sessionId: req.sessionID,
+        isAuthenticated: req.session.isAuthenticated,
+        username: req.session.username
+      });
+      
+      // 세션 저장 확인
+      req.session.save((err) => {
+        if (err) {
+          console.error('❌ 세션 저장 오류:', err);
+        } else {
+          console.log('✅ 세션 저장 완료');
+        }
+      });
+      
       res.json({ success: true, message: '로그인 성공' });
     } else {
       console.warn('⚠️ 로그인 실패:', { 
