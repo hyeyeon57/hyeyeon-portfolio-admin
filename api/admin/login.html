@@ -149,11 +149,17 @@
         
         if (result.success) {
           // 로그인 성공 - 관리자 페이지로 이동
-          console.log('✅ 로그인 성공, 리다이렉트 중...');
+          console.log('✅ 로그인 성공, 리다이렉트 중...', result);
+          
+          // 쿠키 확인
+          console.log('🍪 현재 쿠키:', document.cookie);
+          
           // 세션 쿠키가 설정될 시간을 주기 위해 약간의 지연
           setTimeout(() => {
-            window.location.href = '/admin';
-          }, 100);
+            console.log('🔄 리다이렉트 실행:', '/admin');
+            // window.location.replace를 사용하여 히스토리에 남기지 않음
+            window.location.replace('/admin');
+          }, 200);
         } else {
           // 로그인 실패
           console.error('❌ 로그인 실패:', result.error);

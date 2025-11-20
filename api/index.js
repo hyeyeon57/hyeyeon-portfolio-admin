@@ -212,11 +212,18 @@ app.get('/admin/viewer', (req, res) => {
 });
 
 app.get('/admin', requireAuth, (req, res) => {
+  console.log('📄 /admin 페이지 요청:', {
+    sessionId: req.sessionID,
+    isAuthenticated: req.session?.isAuthenticated,
+    username: req.session?.username
+  });
+  
   const adminIndexPath = getAdminFilePath('index.html');
   if (adminIndexPath) {
+    console.log('✅ Admin 페이지 파일 찾음:', adminIndexPath);
     res.sendFile(adminIndexPath);
   } else {
-    console.error('Admin page not found. __dirname:', __dirname, 'isVercel:', isVercel);
+    console.error('❌ Admin page not found. __dirname:', __dirname, 'isVercel:', isVercel);
     res.status(404).send('Admin page not found.');
   }
 });
@@ -304,10 +311,19 @@ registerApiRoute('post', '/api/auth/login', async (req, res) => {
       // 세션 쿠키 설정 확인
       console.log('🍪 세션 쿠키:', {
         sessionId: req.sessionID,
-        cookie: req.session.cookie
+        cookie: req.session.cookie,
+        cookieName: sessionConfig.name,
+        cookieOptions: sessionConfig.cookie
       });
       
-      res.json({ success: true, message: '로그인 성공' });
+      // 응답 헤더에 세션 쿠키 명시적으로 설정
+      res.cookie(sessionConfig.name, req.sessionID, sessionConfig.cookie);
+      
+      res.json({ 
+        success: true, 
+        message: '로그인 성공',
+        sessionId: req.sessionID
+      });
     } else {
       console.warn('⚠️ 로그인 실패:', { 
         receivedUsername: trimmedUsername,
