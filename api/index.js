@@ -248,15 +248,31 @@ registerApiRoute('post', '/api/auth/login', (req, res) => {
       });
     }
     
-    const usernameMatch = username === ADMIN_USERNAME;
-    const passwordMatch = password === ADMIN_PASSWORD;
+    // 정확한 비교 (공백 제거)
+    const trimmedUsername = (username || '').trim();
+    const trimmedPassword = (password || '').trim();
+    const trimmedExpectedUsername = ADMIN_USERNAME.trim();
+    const trimmedExpectedPassword = ADMIN_PASSWORD.trim();
     
-    console.log('🔍 검증 결과:', { usernameMatch, passwordMatch });
+    const usernameMatch = trimmedUsername === trimmedExpectedUsername;
+    const passwordMatch = trimmedPassword === trimmedExpectedPassword;
+    
+    console.log('🔍 검증 결과:', { 
+      usernameMatch, 
+      passwordMatch,
+      receivedUsername: trimmedUsername,
+      expectedUsername: trimmedExpectedUsername,
+      receivedPasswordLength: trimmedPassword.length,
+      expectedPasswordLength: trimmedExpectedPassword.length,
+      receivedPasswordPreview: trimmedPassword.substring(0, 2) + '***',
+      expectedPasswordPreview: trimmedExpectedPassword.substring(0, 2) + '***',
+      envPassword: process.env.ADMIN_PASSWORD ? '***설정됨***' : '(기본값)'
+    });
     
     if (usernameMatch && passwordMatch) {
       req.session.isAuthenticated = true;
-      req.session.username = username;
-      console.log('✅ 로그인 성공:', username);
+      req.session.username = trimmedUsername;
+      console.log('✅ 로그인 성공:', trimmedUsername);
       console.log('🍪 세션 정보:', {
         sessionId: req.sessionID,
         isAuthenticated: req.session.isAuthenticated,
@@ -275,11 +291,12 @@ registerApiRoute('post', '/api/auth/login', (req, res) => {
       res.json({ success: true, message: '로그인 성공' });
     } else {
       console.warn('⚠️ 로그인 실패:', { 
-        username, 
+        receivedUsername: trimmedUsername,
+        expectedUsername: trimmedExpectedUsername,
         usernameMatch, 
         passwordMatch,
-        receivedPassword: password,
-        expectedPassword: ADMIN_PASSWORD
+        receivedPasswordLength: trimmedPassword.length,
+        expectedPasswordLength: trimmedExpectedPassword.length
       });
       res.status(401).json({ 
         success: false, 
