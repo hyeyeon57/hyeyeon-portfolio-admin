@@ -5,8 +5,8 @@ const path = require('path');
 const { existsSync, mkdirSync, readdirSync } = require('fs');
 const multer = require('multer');
 const mongoose = require('mongoose');
-const session = require('express-session');
-const MemoryStore = require('memorystore')(session);
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 
 // 상대 경로로 모듈 import (Vercel과 로컬 모두 지원)
 let connectDB, Project, Visitor, Contact;
@@ -68,34 +68,12 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
-// 세션 설정 (Vercel 서버리스 환경에 맞게 MemoryStore 사용)
-const sessionConfig = {
-  secret: process.env.SESSION_SECRET || 'vibe-coding-portfolio-secret-key-2025',
-  resave: false,
-  saveUninitialized: false,
-  name: 'admin.sid', // 세션 쿠키 이름
-  cookie: {
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24시간
-    path: '/' // 모든 경로에서 쿠키 사용
-  }
-};
-
-if (isVercel) {
-  // Vercel 환경: MemoryStore 사용, secure 쿠키
-  sessionConfig.store = new MemoryStore({
-    checkPeriod: 86400000 // 24시간
-  });
-  sessionConfig.cookie.secure = true; // HTTPS만
-  sessionConfig.cookie.sameSite = 'none'; // cross-site 쿠키 허용
-} else {
-  // 로컬 환경: 기본 메모리 스토어, HTTP 허용
-  sessionConfig.cookie.secure = false;
-  sessionConfig.cookie.sameSite = 'lax';
-}
-
-app.use(session(sessionConfig));
+// JWT 설정
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'vibe-coding-portfolio-secret-key-2025';
+const JWT_COOKIE_NAME = 'admin_token';
+const JWT_EXPIRES_IN = '24h'; // 24시간
 
 // 파일 업로드 설정 (Vercel에서는 /tmp 디렉토리 사용)
 const storage = multer.diskStorage({
@@ -132,20 +110,41 @@ console.log('🔧 환경 변수 확인:', {
 });
 
 // 로그인 체크 미들웨어
+// JWT 토큰 검증 미들웨어
 const requireAuth = (req, res, next) => {
+  const token = req.cookies[JWT_COOKIE_NAME] || req.headers.authorization?.replace('Bearer ', '');
+  
   console.log('🔒 인증 체크:', {
-    hasSession: !!req.session,
-    isAuthenticated: req.session?.isAuthenticated,
-    sessionId: req.sessionID,
-    cookies: req.headers.cookie
+    hasToken: !!token,
+    tokenPreview: token ? token.substring(0, 20) + '...' : '없음',
+    cookies: Object.keys(req.cookies),
+    cookieHeader: req.headers.cookie ? '있음' : '없음'
   });
   
-  if (req.session && req.session.isAuthenticated) {
-    console.log('✅ 인증 성공, 접근 허용');
-    return next();
+  if (!token) {
+    console.log('❌ 토큰 없음, 로그인 페이지로 리다이렉트');
+    return res.redirect('/admin/login');
   }
-  console.log('❌ 인증 실패, 로그인 페이지로 리다이렉트');
-  res.redirect('/admin/login');
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    console.log('✅ 토큰 검증 성공:', {
+      username: decoded.username,
+      exp: new Date(decoded.exp * 1000).toISOString()
+    });
+    req.user = decoded; // 요청 객체에 사용자 정보 추가
+    return next();
+  } catch (error) {
+    console.log('❌ 토큰 검증 실패:', error.message);
+    // 쿠키 삭제
+    res.clearCookie(JWT_COOKIE_NAME, {
+      httpOnly: true,
+      secure: isVercel,
+      sameSite: isVercel ? 'none' : 'lax',
+      path: '/'
+    });
+    return res.redirect('/admin/login');
+  }
 };
 
 // 파일 경로 확인 함수
@@ -213,9 +212,8 @@ app.get('/admin/viewer', (req, res) => {
 
 app.get('/admin', requireAuth, (req, res) => {
   console.log('📄 /admin 페이지 요청:', {
-    sessionId: req.sessionID,
-    isAuthenticated: req.session?.isAuthenticated,
-    username: req.session?.username
+    user: req.user?.username,
+    hasToken: !!req.cookies[JWT_COOKIE_NAME]
   });
   
   const adminIndexPath = getAdminFilePath('index.html');
@@ -286,43 +284,41 @@ registerApiRoute('post', '/api/auth/login', async (req, res) => {
     });
     
     if (usernameMatch && passwordMatch) {
-      req.session.isAuthenticated = true;
-      req.session.username = trimmedUsername;
+      // JWT 토큰 생성
+      const token = jwt.sign(
+        { 
+          username: trimmedUsername,
+          authenticated: true 
+        },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRES_IN }
+      );
+      
       console.log('✅ 로그인 성공:', trimmedUsername);
-      console.log('🍪 세션 정보:', {
-        sessionId: req.sessionID,
-        isAuthenticated: req.session.isAuthenticated,
-        username: req.session.username
-      });
+      console.log('🎫 JWT 토큰 생성 완료');
       
-      // 세션 저장을 Promise로 감싸서 완료 후 응답
-      await new Promise((resolve, reject) => {
-        req.session.save((err) => {
-          if (err) {
-            console.error('❌ 세션 저장 오류:', err);
-            reject(err);
-          } else {
-            console.log('✅ 세션 저장 완료');
-            resolve();
-          }
-        });
-      });
+      // 쿠키 옵션 설정
+      const cookieOptions = {
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000, // 24시간
+        path: '/',
+        secure: isVercel, // Vercel에서는 HTTPS만
+        sameSite: isVercel ? 'none' : 'lax' // Vercel에서는 cross-site 허용
+      };
       
-      // 세션 쿠키 설정 확인
-      console.log('🍪 세션 쿠키:', {
-        sessionId: req.sessionID,
-        cookie: req.session.cookie,
-        cookieName: sessionConfig.name,
-        cookieOptions: sessionConfig.cookie
-      });
+      // JWT 토큰을 쿠키에 설정
+      res.cookie(JWT_COOKIE_NAME, token, cookieOptions);
       
-      // 응답 헤더에 세션 쿠키 명시적으로 설정
-      res.cookie(sessionConfig.name, req.sessionID, sessionConfig.cookie);
+      console.log('🍪 쿠키 설정 완료:', {
+        cookieName: JWT_COOKIE_NAME,
+        secure: cookieOptions.secure,
+        sameSite: cookieOptions.sameSite
+      });
       
       res.json({ 
         success: true, 
         message: '로그인 성공',
-        sessionId: req.sessionID
+        token: token // 디버깅용 (실제로는 쿠키에만 저장)
       });
     } else {
       console.warn('⚠️ 로그인 실패:', { 
@@ -348,18 +344,33 @@ registerApiRoute('post', '/api/auth/login', async (req, res) => {
 });
 
 registerApiRoute('post', '/api/auth/logout', (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      return res.status(500).json({ success: false, error: '로그아웃 실패' });
-    }
-    res.json({ success: true, message: '로그아웃 성공' });
+  // JWT 쿠키 삭제
+  res.clearCookie(JWT_COOKIE_NAME, {
+    httpOnly: true,
+    secure: isVercel,
+    sameSite: isVercel ? 'none' : 'lax',
+    path: '/'
   });
+  console.log('✅ 로그아웃 완료');
+  res.json({ success: true, message: '로그아웃되었습니다.' });
 });
 
 registerApiRoute('get', '/api/auth/check', (req, res) => {
+  const token = req.cookies[JWT_COOKIE_NAME] || req.headers.authorization?.replace('Bearer ', '');
+  let authenticated = false;
+  
+  if (token) {
+    try {
+      jwt.verify(token, JWT_SECRET);
+      authenticated = true;
+    } catch (error) {
+      authenticated = false;
+    }
+  }
+  
   res.json({
     success: true,
-    authenticated: req.session && req.session.isAuthenticated || false
+    authenticated: authenticated
   });
 });
 
