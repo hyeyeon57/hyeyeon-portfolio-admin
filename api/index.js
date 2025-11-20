@@ -173,6 +173,12 @@ const getAdminFilePath = (filename) => {
 
 // 정적 파일 서빙은 각 라우트에서 직접 처리
 
+// 루트 경로 처리
+app.get('/', (req, res) => {
+  // 루트 경로는 관리자 로그인 페이지로 리다이렉트
+  res.redirect('/admin/login');
+});
+
 // 백오피스 관리자 페이지 라우트
 app.get('/admin/login', (req, res) => {
   if (req.session && req.session.isAuthenticated) {
