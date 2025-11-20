@@ -510,18 +510,35 @@ registerApiRoute('get', '/api/visitors', async (req, res) => {
 // 프로젝트 목록 조회 (백오피스 API)
 const handleGetProjects = async (req, res) => {
   try {
+    console.log('📋 프로젝트 목록 조회 요청:', {
+      url: req.url,
+      method: req.method,
+      origin: req.headers.origin
+    });
+    
     await initDB();
     if (mongoose.connection.readyState !== 1) {
+      console.error('❌ MongoDB 연결 실패:', mongoose.connection.readyState);
       return res.status(503).json({
         success: false,
         error: 'MongoDB가 연결되지 않았습니다. MongoDB를 실행하거나 .env 파일에 MONGODB_URI를 설정하세요.'
       });
     }
+    
     const projects = await Project.find().sort({ createdAt: -1 });
+    console.log('✅ 프로젝트 조회 성공:', {
+      count: projects.length,
+      projectIds: projects.map(p => p.id || p._id)
+    });
+    
     res.json({ success: true, data: projects });
   } catch (error) {
-    console.error('프로젝트 조회 오류:', error);
-    res.status(500).json({ success: false, error: '프로젝트를 불러오는데 실패했습니다.' });
+    console.error('❌ 프로젝트 조회 오류:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: '프로젝트를 불러오는데 실패했습니다.',
+      details: error.message 
+    });
   }
 };
 
@@ -735,10 +752,13 @@ if (isVercel) {
       
       // Vercel에서 rewrite된 경로 처리
       // req.url은 원본 경로를 포함 (예: /admin, /admin/login, /api/bo/auth/login)
-      // /api/bo/* 경로를 /api/*로 변환
-      if (req.url && req.url.startsWith('/api/bo/')) {
-        req.url = req.url.replace('/api/bo', '/api');
-      }
+      // /api/bo/* 경로는 그대로 유지 (registerApiRoute가 이미 /api/bo 경로도 등록함)
+      console.log('🌐 서버리스 함수 요청:', {
+        method: req.method,
+        url: req.url,
+        originalUrl: req.originalUrl,
+        path: req.path
+      });
       
       // Express 앱에 요청 전달
       return app(req, res);
