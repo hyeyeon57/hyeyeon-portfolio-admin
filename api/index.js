@@ -979,6 +979,11 @@ if (isVercel) {
         path: req.path
       });
       
+      // 루트 경로 직접 처리
+      if (req.url === '/' || req.path === '/') {
+        return res.redirect('/admin/login');
+      }
+      
       // Express 앱에 요청 전달
       return app(req, res);
     } catch (error) {
