@@ -8,11 +8,33 @@ const mongoose = require('mongoose');
 const session = require('express-session');
 const MemoryStore = require('memorystore')(session);
 
-// 상대 경로로 모듈 import
-const { connectDB } = require('../server/config/database.cjs');
-const Project = require('../server/models/Project.cjs');
-const Visitor = require('../server/models/Visitor.cjs');
-const Contact = require('../server/models/Contact.cjs');
+// 상대 경로로 모듈 import (Vercel과 로컬 모두 지원)
+let connectDB, Project, Visitor, Contact;
+
+try {
+  // Vercel: __dirname은 /var/task/api, ../server는 /var/task/server
+  // 로컬: __dirname은 api/, ../server는 server/
+  const dbModule = require('../server/config/database.cjs');
+  connectDB = dbModule.connectDB;
+  Project = require('../server/models/Project.cjs');
+  Visitor = require('../server/models/Visitor.cjs');
+  Contact = require('../server/models/Contact.cjs');
+} catch (error) {
+  console.error('❌ 모듈 로드 오류:', error.message);
+  // Vercel 환경에서 다른 경로 시도
+  if (isVercel) {
+    try {
+      const serverPath = path.join(process.cwd(), 'server');
+      const dbModule = require(path.join(serverPath, 'config', 'database.cjs'));
+      connectDB = dbModule.connectDB;
+      Project = require(path.join(serverPath, 'models', 'Project.cjs'));
+      Visitor = require(path.join(serverPath, 'models', 'Visitor.cjs'));
+      Contact = require(path.join(serverPath, 'models', 'Contact.cjs'));
+    } catch (fallbackError) {
+      console.error('❌ 폴백 모듈 로드도 실패:', fallbackError.message);
+    }
+  }
+}
 
 const app = express();
 
@@ -24,34 +46,56 @@ const isVercel = process.env.VERCEL === '1';
 // 로컬: __dirname은 api/ 디렉토리를 가리킴
 
 // 미들웨어
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  'https://hyeyeon-portfolio.vercel.app',
+  'https://hyeyeon57-hyeyeon-portfolio-admin.vercel.app',
+  process.env.FRONTEND_URL || 'https://hyeyeon-portfolio.vercel.app'
+].filter(Boolean);
+
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'https://hyeyeon-portfolio.vercel.app',
-    process.env.FRONTEND_URL || 'https://hyeyeon-portfolio.vercel.app'
-  ],
+  origin: (origin, callback) => {
+    // origin이 없으면 (같은 도메인 요청) 허용
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, true); // 개발 중에는 모든 origin 허용
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 세션 설정 (Vercel 서버리스 환경에 맞게 MemoryStore 사용)
-app.use(session({
+const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'vibe-coding-portfolio-secret-key-2025',
   resave: false,
   saveUninitialized: false,
-  store: isVercel ? new MemoryStore({
-    checkPeriod: 86400000 // 24시간
-  }) : undefined, // 로컬에서는 기본 메모리 스토어 사용
+  name: 'admin.sid', // 세션 쿠키 이름
   cookie: {
-    secure: isVercel ? true : false, // Vercel에서는 HTTPS만, 로컬에서는 HTTP 허용
     httpOnly: true,
-    sameSite: isVercel ? 'none' : 'lax', // Vercel에서는 cross-site 쿠키 허용
-    maxAge: 24 * 60 * 60 * 1000 // 24시간
+    maxAge: 24 * 60 * 60 * 1000, // 24시간
+    path: '/' // 모든 경로에서 쿠키 사용
   }
-}));
+};
+
+if (isVercel) {
+  // Vercel 환경: MemoryStore 사용, secure 쿠키
+  sessionConfig.store = new MemoryStore({
+    checkPeriod: 86400000 // 24시간
+  });
+  sessionConfig.cookie.secure = true; // HTTPS만
+  sessionConfig.cookie.sameSite = 'none'; // cross-site 쿠키 허용
+} else {
+  // 로컬 환경: 기본 메모리 스토어, HTTP 허용
+  sessionConfig.cookie.secure = false;
+  sessionConfig.cookie.sameSite = 'lax';
+}
+
+app.use(session(sessionConfig));
 
 // 파일 업로드 설정 (Vercel에서는 /tmp 디렉토리 사용)
 const storage = multer.diskStorage({
@@ -125,7 +169,7 @@ app.get('/admin/login', (req, res) => {
   if (loginPath) {
     res.sendFile(loginPath);
   } else {
-    console.error('Login page not found. Base path:', basePath, 'Admin path:', adminPath);
+    console.error('Login page not found. __dirname:', __dirname, 'isVercel:', isVercel);
     res.status(404).send('Login page not found.');
   }
 });
@@ -135,7 +179,7 @@ app.get('/admin/viewer', (req, res) => {
   if (adminIndexPath) {
     res.sendFile(adminIndexPath);
   } else {
-    console.error('Admin viewer page not found. Base path:', basePath, 'Admin path:', adminPath);
+    console.error('Admin viewer page not found. __dirname:', __dirname, 'isVercel:', isVercel);
     res.status(404).send('Admin viewer page not found.');
   }
 });
@@ -145,7 +189,7 @@ app.get('/admin', requireAuth, (req, res) => {
   if (adminIndexPath) {
     res.sendFile(adminIndexPath);
   } else {
-    console.error('Admin page not found. Base path:', basePath, 'Admin path:', adminPath);
+    console.error('Admin page not found. __dirname:', __dirname, 'isVercel:', isVercel);
     res.status(404).send('Admin page not found.');
   }
 });
@@ -155,7 +199,7 @@ app.get('/admin/create', requireAuth, (req, res) => {
   if (createPath) {
     res.sendFile(createPath);
   } else {
-    console.error('Create page not found. Base path:', basePath, 'Admin path:', adminPath);
+    console.error('Create page not found. __dirname:', __dirname, 'isVercel:', isVercel);
     res.status(404).send('Project creation page not found.');
   }
 });
@@ -168,13 +212,34 @@ const registerApiRoute = (method, path, handler) => {
 };
 
 registerApiRoute('post', '/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-    req.session.isAuthenticated = true;
-    req.session.username = username;
-    res.json({ success: true, message: '로그인 성공' });
-  } else {
-    res.status(401).json({ success: false, error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        error: '아이디와 비밀번호를 입력해주세요.' 
+      });
+    }
+    
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+      req.session.isAuthenticated = true;
+      req.session.username = username;
+      console.log('✅ 로그인 성공:', username);
+      res.json({ success: true, message: '로그인 성공' });
+    } else {
+      console.warn('⚠️ 로그인 실패:', username);
+      res.status(401).json({ 
+        success: false, 
+        error: '아이디 또는 비밀번호가 올바르지 않습니다.' 
+      });
+    }
+  } catch (error) {
+    console.error('❌ 로그인 처리 오류:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: '로그인 처리 중 오류가 발생했습니다.' 
+    });
   }
 });
 
@@ -537,24 +602,38 @@ registerApiRoute('delete', '/api/contacts/:id', async (req, res) => {
 if (isVercel) {
   // Vercel 서버리스 함수 형식
   module.exports = (req, res) => {
-    // CORS 헤더 추가
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    
-    if (req.method === 'OPTIONS') {
-      return res.status(200).end();
+    try {
+      // CORS 헤더 추가
+      const origin = req.headers.origin;
+      if (origin && allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+      } else {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+      }
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      
+      if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+      }
+      
+      // Vercel에서 rewrite된 경로 처리
+      // req.url은 원본 경로를 포함 (예: /admin, /admin/login, /api/bo/auth/login)
+      // /api/bo/* 경로를 /api/*로 변환
+      if (req.url && req.url.startsWith('/api/bo/')) {
+        req.url = req.url.replace('/api/bo', '/api');
+      }
+      
+      // Express 앱에 요청 전달
+      return app(req, res);
+    } catch (error) {
+      console.error('❌ 서버리스 함수 오류:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: '서버 오류가 발생했습니다.' 
+      });
     }
-    
-    // Vercel에서 rewrite된 경로 처리
-    // req.url은 원본 경로를 포함 (예: /admin, /admin/login)
-    // /api/bo/* 경로를 /api/*로 변환
-    if (req.url && req.url.startsWith('/api/bo/')) {
-      req.url = req.url.replace('/api/bo', '/api');
-    }
-    
-    // Express 앱에 요청 전달
-    return app(req, res);
   };
 } else {
   // 로컬 개발 환경
