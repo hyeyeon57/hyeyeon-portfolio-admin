@@ -729,8 +729,8 @@ registerApiRoute('delete', '/api/contacts/:id', async (req, res) => {
   }
 });
 
-// 정적 프로젝트 데이터 마이그레이션 API (인증 필요)
-registerApiRoute('post', '/api/migrate/projects', requireAuth, async (req, res) => {
+// 마이그레이션 핸들러 함수
+const migrateProjectsHandler = async (req, res) => {
   try {
     await initDB();
     if (mongoose.connection.readyState !== 1) {
@@ -942,7 +942,11 @@ registerApiRoute('post', '/api/migrate/projects', requireAuth, async (req, res) 
       details: error.message
     });
   }
-});
+};
+
+// 마이그레이션 API 등록 (인증 필요)
+app.post('/api/migrate/projects', requireAuth, migrateProjectsHandler);
+app.post('/api/bo/migrate/projects', requireAuth, migrateProjectsHandler);
 
 // Vercel 서버리스 함수 핸들러
 // Vercel 환경에서는 서버리스 함수로, 로컬에서는 Express 앱으로 동작
