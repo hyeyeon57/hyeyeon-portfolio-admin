@@ -133,9 +133,18 @@ console.log('🔧 환경 변수 확인:', {
 
 // 로그인 체크 미들웨어
 const requireAuth = (req, res, next) => {
+  console.log('🔒 인증 체크:', {
+    hasSession: !!req.session,
+    isAuthenticated: req.session?.isAuthenticated,
+    sessionId: req.sessionID,
+    cookies: req.headers.cookie
+  });
+  
   if (req.session && req.session.isAuthenticated) {
+    console.log('✅ 인증 성공, 접근 허용');
     return next();
   }
+  console.log('❌ 인증 실패, 로그인 페이지로 리다이렉트');
   res.redirect('/admin/login');
 };
 
@@ -229,7 +238,7 @@ const registerApiRoute = (method, path, handler) => {
   app[method](`/api/bo${path.replace('/api', '')}`, handler);
 };
 
-registerApiRoute('post', '/api/auth/login', (req, res) => {
+registerApiRoute('post', '/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     
@@ -279,13 +288,23 @@ registerApiRoute('post', '/api/auth/login', (req, res) => {
         username: req.session.username
       });
       
-      // 세션 저장 확인
-      req.session.save((err) => {
-        if (err) {
-          console.error('❌ 세션 저장 오류:', err);
-        } else {
-          console.log('✅ 세션 저장 완료');
-        }
+      // 세션 저장을 Promise로 감싸서 완료 후 응답
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('❌ 세션 저장 오류:', err);
+            reject(err);
+          } else {
+            console.log('✅ 세션 저장 완료');
+            resolve();
+          }
+        });
+      });
+      
+      // 세션 쿠키 설정 확인
+      console.log('🍪 세션 쿠키:', {
+        sessionId: req.sessionID,
+        cookie: req.session.cookie
       });
       
       res.json({ success: true, message: '로그인 성공' });
