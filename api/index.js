@@ -119,18 +119,17 @@ const upload = multer({ storage });
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'hing0915';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'dpffla525';
 
-// 환경 변수 로깅 (디버깅용 - 프로덕션에서는 제거 권장)
-if (isVercel) {
-  console.log('🔧 환경 변수 확인:', {
-    hasUsername: !!process.env.ADMIN_USERNAME,
-    hasPassword: !!process.env.ADMIN_PASSWORD,
-    usernameLength: ADMIN_USERNAME.length,
-    passwordLength: ADMIN_PASSWORD.length,
-    username: ADMIN_USERNAME,
-    // 비밀번호는 보안상 일부만 표시
-    passwordPreview: ADMIN_PASSWORD.substring(0, 3) + '***'
-  });
-}
+// 환경 변수 로깅 (디버깅용)
+console.log('🔧 환경 변수 확인:', {
+  isVercel: isVercel,
+  hasUsernameEnv: !!process.env.ADMIN_USERNAME,
+  hasPasswordEnv: !!process.env.ADMIN_PASSWORD,
+  usernameFromEnv: process.env.ADMIN_USERNAME || '(기본값 사용)',
+  passwordFromEnv: process.env.ADMIN_PASSWORD ? '***설정됨***' : '(기본값 사용)',
+  finalUsername: ADMIN_USERNAME,
+  finalPasswordLength: ADMIN_PASSWORD.length,
+  finalPasswordPreview: ADMIN_PASSWORD.substring(0, 2) + '***' + ADMIN_PASSWORD.substring(ADMIN_PASSWORD.length - 2)
+});
 
 // 로그인 체크 미들웨어
 const requireAuth = (req, res, next) => {
