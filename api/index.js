@@ -117,7 +117,7 @@ const upload = multer({ storage });
 
 // 관리자 계정 정보
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'hing0915';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'dpffla525!';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'dpffla525';
 
 // 로그인 체크 미들웨어
 const requireAuth = (req, res, next) => {
@@ -215,6 +215,14 @@ registerApiRoute('post', '/api/auth/login', (req, res) => {
   try {
     const { username, password } = req.body;
     
+    console.log('🔐 로그인 시도:', { 
+      username, 
+      passwordLength: password?.length,
+      expectedUsername: ADMIN_USERNAME,
+      expectedPasswordLength: ADMIN_PASSWORD.length,
+      isVercel: isVercel
+    });
+    
     if (!username || !password) {
       return res.status(400).json({ 
         success: false, 
@@ -222,13 +230,24 @@ registerApiRoute('post', '/api/auth/login', (req, res) => {
       });
     }
     
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    const usernameMatch = username === ADMIN_USERNAME;
+    const passwordMatch = password === ADMIN_PASSWORD;
+    
+    console.log('🔍 검증 결과:', { usernameMatch, passwordMatch });
+    
+    if (usernameMatch && passwordMatch) {
       req.session.isAuthenticated = true;
       req.session.username = username;
       console.log('✅ 로그인 성공:', username);
       res.json({ success: true, message: '로그인 성공' });
     } else {
-      console.warn('⚠️ 로그인 실패:', username);
+      console.warn('⚠️ 로그인 실패:', { 
+        username, 
+        usernameMatch, 
+        passwordMatch,
+        receivedPassword: password,
+        expectedPassword: ADMIN_PASSWORD
+      });
       res.status(401).json({ 
         success: false, 
         error: '아이디 또는 비밀번호가 올바르지 않습니다.' 
