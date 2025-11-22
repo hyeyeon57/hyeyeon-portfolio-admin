@@ -2,7 +2,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { existsSync, mkdirSync, readdirSync } = require('fs');
+const { existsSync, mkdirSync, readdirSync, readFileSync } = require('fs');
 const multer = require('multer');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
@@ -729,182 +729,73 @@ registerApiRoute('delete', '/api/contacts/:id', async (req, res) => {
   }
 });
 
-// 마이그레이션 핸들러 함수
+// 마이그레이션 핸들러 함수 (중복 코드 제거 및 오류 처리 개선)
 const migrateProjectsHandler = async (req, res) => {
   try {
     await initDB();
     if (mongoose.connection.readyState !== 1) {
       return res.status(503).json({
         success: false,
-        error: 'MongoDB가 연결되지 않았습니다.'
+        error: 'MongoDB가 연결되지 않았습니다. MongoDB를 실행하거나 .env 파일에 MONGODB_URI를 설정하세요.'
       });
     }
 
-    // 정적 프로젝트 데이터 (portfolio.ts에서 추출)
-    const staticProjects = [
-      {
-        id: '1',
-        title: '화해 앱 리뉴얼 제안서',
-        subtitle: '화장품 추천 및 리뷰 플랫폼 리뉴얼',
-        description: '사용자 피드백 분석을 통한 화해 앱의 사용성 개선 및 새로운 기능 제안',
-        fullDescription: '화해 앱의 기존 사용자 피드백을 분석하고, 사용성 문제점을 파악하여 리뉴얼 방향을 제시했습니다. 화장품 추천 알고리즘 개선과 리뷰 시스템 최적화에 중점을 두었습니다.',
-        image: '/projects/Hwahae.png',
-        tags: ['리뉴얼', '사용성 개선', '추천 시스템'],
-        category: 'renewal',
-        date: '2024',
-        role: 'UX 기획자',
-        duration: '2개월',
-        team: '3명',
-        achievements: ['사용자 피드백 분석 완료', '추천 알고리즘 개선안 제시', '리뷰 시스템 UX 개선'],
-        link: '#',
-        featured: false
-      },
-      {
-        id: '2',
-        title: '맘으로',
-        subtitle: '육아정책 통합 앱 신규 기획',
-        description: '복잡한 육아정책 정보를 쉽게 찾을 수 있는 통합 플랫폼 설계',
-        fullDescription: '산모와 영유아 부모를 위한 육아정책 통합 앱을 기획했습니다. 복잡한 정책 정보를 사용자 중심으로 재구성하여 접근성을 크게 향상시켰습니다.',
-        image: '/projects/mom.jpg',
-        tags: ['신규 기획', '정책 정보', '사용자 중심 설계'],
-        category: 'app',
-        date: '2024',
-        role: 'UX 기획자',
-        duration: '3개월',
-        team: '4명',
-        achievements: ['정책 정보 접근성 향상', '사용자 탐색 효율 개선', '맞춤형 추천 시스템 설계'],
-        link: '#',
-        featured: false
-      },
-      {
-        id: '3',
-        title: 'SRT 승차권 예매 편의성 개선',
-        subtitle: '예매 프로세스 최적화 프로젝트',
-        description: 'IA 설계 및 화면 설계서 작성으로 예매 단계를 7단계에서 4단계로 축소',
-        fullDescription: 'SRT 예매 시스템의 복잡한 프로세스를 분석하고 재설계했습니다. IA 설계와 UX 플로우 재구성을 통해 예매 단계를 축소하고 접근성 및 사용성을 개선했습니다.',
-        image: '/projects/srt.jpg',
-        tags: ['IA 설계', '화면설계서', 'UX 플로우'],
-        category: 'renewal',
-        date: '2024',
-        role: 'UX 기획자',
-        duration: '3개월',
-        team: '3명',
-        achievements: ['예매 단계 7→4단계 축소', '접근성 및 사용성 개선', '화면설계서 작성 및 개발 전달'],
-        link: '#',
-        featured: true
-      },
-      {
-        id: '4',
-        title: '밀리의 서재 사용성 개선',
-        subtitle: '사용자 중심 UX 리서치 및 개선 프로젝트',
-        description: '사용자 인터뷰와 아이트래킹 분석을 통해 책장 관리 성공률을 60%에서 96%로 향상',
-        fullDescription: '밀리의 서재 앱의 사용성 문제를 발견하고 개선했습니다. 사용자 인터뷰와 아이트래킹 분석을 통해 핵심 문제를 정의하고, UI 개선 제안으로 책장 관리 성공률을 크게 향상시켰습니다.',
-        image: '/projects/millie.jpg',
-        tags: ['사용자 인터뷰', '아이트래킹', 'UI 개선'],
-        category: 'usability',
-        date: '2024',
-        role: 'UX 리서처',
-        duration: '2개월',
-        team: '2명',
-        achievements: ['책장 관리 성공률 60% → 96% 향상', '아이트래킹 데이터 기반 인사이트 도출', 'UI 개선안 제시 및 검증'],
-        link: '#',
-        featured: true
-      },
-      {
-        id: '5',
-        title: '계원예술대학교 웹사이트 리뉴얼',
-        subtitle: '대학 웹사이트 사용성 개선 프로젝트',
-        description: '대학 웹사이트의 정보 구조 개선 및 사용자 경험 최적화',
-        fullDescription: '계원예술대학교 웹사이트의 사용성 문제를 분석하고 리뉴얼 방향을 제시했습니다. 정보 구조 개선과 사용자 중심의 네비게이션 설계에 중점을 두었습니다.',
-        image: '/projects/kaywon.png',
-        tags: ['웹사이트 리뉴얼', '정보 구조', '사용성 개선'],
-        category: 'new',
-        date: '2024',
-        role: 'UX 기획자',
-        duration: '2개월',
-        team: '3명',
-        achievements: ['정보 구조 개선안 제시', '사용자 네비게이션 최적화', '웹사이트 사용성 향상'],
-        link: '#',
-        featured: true
-      },
-      {
-        id: '6',
-        title: 'ART-LANG',
-        subtitle: '신진 작가와 아트슈머를 잇는 온라인 전시 플랫폼',
-        description: 'IA 설계, UX 구조 기획, 감정 기반 피드 디자인을 통해 전시 참여 프로세스를 획기적으로 개선',
-        fullDescription: '신진 작가와 아트슈머를 연결하는 온라인 전시 플랫폼 ArtLang의 사용자 경험을 설계했습니다. 복잡했던 전시 참여 프로세스를 3단계에서 1단계로 단축하여 사용자 참여율을 크게 향상시켰습니다.',
-        image: '/projects/artrang.jpg',
-        tags: ['IA 설계', 'UX 기획', '감정 기반 디자인'],
-        category: 'app',
-        date: '2024',
-        role: 'UX 기획자',
-        duration: '3개월',
-        team: '4명',
-        achievements: ['전시 참여 프로세스 3단계 → 1단계 단축', '사용자 참여율 향상', '감정 기반 피드 시스템 설계'],
-        link: '#',
-        featured: true
-      },
-      {
-        id: '7',
-        title: '쿠팡 리뉴얼 프로젝트',
-        subtitle: '이커머스 플랫폼 사용성 개선',
-        description: '쿠팡 앱의 구매 프로세스 최적화 및 사용자 경험 개선 제안',
-        fullDescription: '쿠팡 앱의 구매 프로세스를 분석하고 사용성 개선 방안을 제시했습니다. 복잡한 구매 단계를 단순화하고 사용자 만족도를 향상시키는 방향으로 기획했습니다.',
-        image: '/projects/cupang.png',
-        tags: ['이커머스', '구매 프로세스', '사용성 개선'],
-        category: 'renewal',
-        date: '2024',
-        role: 'UX 기획자',
-        duration: '2개월',
-        team: '3명',
-        achievements: ['구매 프로세스 단순화', '사용자 만족도 향상', '구매 전환율 개선'],
-        link: '#',
-        featured: false
-      },
-      {
-        id: '8',
-        title: '데이터 시각화 프로젝트',
-        subtitle: 'Data Storytelling & 대시보드 UX',
-        description: '복잡한 데이터를 사용자가 직관적으로 이해할 수 있는 대시보드 및 인터랙티브 시각화 설계',
-        fullDescription: '복잡한 데이터를 사용자가 직관적으로 이해할 수 있는 대시보드와 인터랙티브 시각화를 기획했습니다. 데이터의 흐름과 관계를 쉽게 파악할 수 있도록 시각적 인사이트를 제공하는 시스템을 설계했습니다.',
-        image: '/projects/data.jpg',
-        tags: ['Data Storytelling', '대시보드 UX', '시각적 인사이트'],
-        category: 'proposal',
-        date: '2024',
-        role: '데이터 분석 기획',
-        duration: '3개월',
-        team: '4명',
-        achievements: ['데이터 맵 설계 완료', '시각화 IA 구조 설계', '대시보드 와이어프레임 제작'],
-        link: '#',
-        featured: false
-      },
-      {
-        id: '9',
-        title: 'Portfolio Website',
-        subtitle: 'Cursor AI × Figma MCP 연동 제작',
-        description: '기획자의 시선으로 디자인부터 코드까지 직접 설계하며, AI를 활용한 사고 확장과 문서화 중심의 제작 프로세스 구축',
-        fullDescription: '기획자로서 AI를 활용해 포트폴리오 웹사이트를 직접 기획하고 제작했습니다. Cursor AI와 Figma MCP를 연동하여 디자인 시스템부터 코드까지 일관성 있게 구현했습니다.',
-        image: '/projects/port.jpg',
-        tags: ['AI 활용', 'Cursor', 'Figma MCP', '웹 기획'],
-        category: 'web',
-        date: '2025',
-        role: '기획자 & 개발자',
-        duration: '1개월',
-        team: '1명',
-        achievements: ['AI를 활용한 효율적 기획 프로세스', 'Figma 디자인 시스템 완벽 구현', '문서화 중심의 체계적 제작'],
-        link: '#',
-        featured: false
+    // data/projects.json 파일에서 프로젝트 데이터 읽기
+    const projectsJsonPath = path.join(__dirname, '../data/projects.json');
+    let staticProjects = [];
+    
+    try {
+      if (existsSync(projectsJsonPath)) {
+        const fileContent = readFileSync(projectsJsonPath, 'utf-8');
+        staticProjects = JSON.parse(fileContent);
+        console.log(`📦 JSON 파일에서 ${staticProjects.length}개의 프로젝트를 로드했습니다.`);
+      } else {
+        // Vercel 환경에서 다른 경로 시도
+        const altPath = path.join(process.cwd(), 'data', 'projects.json');
+        if (existsSync(altPath)) {
+          const fileContent = readFileSync(altPath, 'utf-8');
+          staticProjects = JSON.parse(fileContent);
+          console.log(`📦 대체 경로에서 ${staticProjects.length}개의 프로젝트를 로드했습니다.`);
+        } else {
+          return res.status(404).json({
+            success: false,
+            error: '프로젝트 데이터 파일을 찾을 수 없습니다. data/projects.json 파일이 존재하는지 확인하세요.'
+          });
+        }
       }
-    ];
+    } catch (fileError) {
+      console.error('❌ 프로젝트 데이터 파일 읽기 오류:', fileError);
+      return res.status(500).json({
+        success: false,
+        error: '프로젝트 데이터 파일을 읽는데 실패했습니다.',
+        details: fileError.message
+      });
+    }
+
+    if (!Array.isArray(staticProjects) || staticProjects.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: '프로젝트 데이터가 비어있거나 올바르지 않습니다.'
+      });
+    }
 
     console.log(`📦 ${staticProjects.length}개의 프로젝트를 MongoDB로 마이그레이션합니다...`);
 
     let added = 0;
     let updated = 0;
     let skipped = 0;
+    const errors = [];
 
     for (const projectData of staticProjects) {
       try {
+        // 필수 필드 검증
+        if (!projectData.id || !projectData.title) {
+          console.warn(`⚠️  프로젝트 ID 또는 제목이 없습니다. 건너뜁니다:`, projectData);
+          skipped++;
+          errors.push(`프로젝트 ID 또는 제목이 없습니다: ${JSON.stringify(projectData)}`);
+          continue;
+        }
+
         const existing = await Project.findOne({ id: projectData.id });
         
         if (existing) {
@@ -921,25 +812,34 @@ const migrateProjectsHandler = async (req, res) => {
           added++;
         }
       } catch (error) {
-        console.error(`❌ 프로젝트 "${projectData.title}" (ID: ${projectData.id}) 처리 실패:`, error.message);
+        console.error(`❌ 프로젝트 "${projectData.title || 'Unknown'}" (ID: ${projectData.id || 'Unknown'}) 처리 실패:`, error.message);
         skipped++;
+        errors.push(`프로젝트 "${projectData.title}" (ID: ${projectData.id}) 처리 실패: ${error.message}`);
       }
     }
 
-    res.json({
+    const response = {
       success: true,
       message: '마이그레이션 완료',
       added,
       updated,
       skipped,
       total: staticProjects.length
-    });
+    };
+
+    if (errors.length > 0) {
+      response.errors = errors;
+      console.warn(`⚠️  ${errors.length}개의 오류가 발생했습니다.`);
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('❌ 마이그레이션 오류:', error);
     res.status(500).json({
       success: false,
       error: '마이그레이션 중 오류가 발생했습니다.',
-      details: error.message
+      details: error.message,
+      stack: isVercel ? undefined : error.stack
     });
   }
 };
